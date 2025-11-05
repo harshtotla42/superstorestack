@@ -1,5 +1,6 @@
 import streamlit as st
 from elasticsearch import Elasticsearch
+from openai import OpenAI
 import pandas as pd
 
 # ---------------------------------------------
@@ -16,12 +17,109 @@ es = Elasticsearch(
     verify_certs=False
 )
 
+# Configure OpenAI
+# openai_client = OpenAI(
+#     api_key=""
+# )
+
+index_source_fields = {
+    "ele-faq": [
+        "semantic_search"
+    ],
+    "ele-support": [
+        "semantic_search"
+    ]
+}
+
+def get_elasticsearch_results(query):
+    es_query = {
+        "retriever": {
+            "rrf": {
+                "retrievers": [
+                    {
+                        "standard": {
+                            "query": {
+                                "semantic": {
+                                    "field": "semantic_search",
+                                    "query": query
+                                }
+                            }
+                        }
+                    },
+                    {
+                        "standard": {
+                            "query": {
+                                "semantic": {
+                                    "field": "semantic_search",
+                                    "query": query
+                                }
+                            }
+                        }
+                    }
+                ]
+            }
+        },
+        "highlight": {
+            "fields": {
+                "semantic_search": {
+                    "type": "semantic",
+                    "number_of_fragments": 2,
+                    "order": "score"
+                }
+            }
+        },
+        "size": 5
+    }
+    result = es.search(index="ele-faq,ele-support", body=es_query)
+    return result["hits"]["hits"]
+
+def create_openai_prompt(results):
+    context = ""
+    for hit in results:
+        ## For semantic_text matches, we need to extract the text from the highlighted field
+        if "highlight" in hit:
+            highlighted_texts = []
+            for values in hit["highlight"].values():
+                highlighted_texts.extend(values)
+            context += "\n --- \n".join(highlighted_texts)
+        else:
+            context_fields = index_source_fields.get(hit["_index"])
+            for source_field in context_fields:
+                hit_context = hit["_source"][source_field]
+                if hit_context:
+                    context += f"{source_field}: {hit_context}\n"
+    prompt = f"""
+Instructions:
+
+- You are an assistant for question-answering tasks.
+- Answer questions truthfully and factually using only the context presented.
+- If you don't know the answer, just say that you don't know, don't make up an answer.
+- You must always cite the document where the answer was extracted using inline academic citation style [], using the position.
+- Use markdown format for code examples.
+- You are correct, factual, precise, and reliable.
+
+Context:
+{context}
+
+"""
+    return prompt
+
+def generate_openai_completion(user_prompt, query):
+    response = openai_client.chat.completions.create(
+        model="gpt-3.5-turbo",
+        messages=[
+            {"role": "system", "content": user_prompt},
+            {"role": "user", "content": query},
+        ]
+    )
+    return response.choices[0].message.content
+
 # ---------------------------------------------
 # STREAMLIT LAYOUT
 # ---------------------------------------------
 
 st.set_page_config(page_title="Elastic Superstore Stack", layout="wide")
-tab1, tab2, tab3 = st.tabs(["Product Search", "Support Tickets", "Knowledge Base"])
+tab1, tab2, tab3, tab4 = st.tabs(["Product Search", "Support Tickets", "Knowledge Base", "Chat"])
 with tab1:
     col_sidebar1, col_main1 = st.columns([1, 4])
     with col_sidebar1:
@@ -291,3 +389,25 @@ with tab3:
                     st.markdown("---")
         else:
             st.info("No articles found. Try changing your filters or query.")
+# with tab4:
+#     if "messages" not in st.session_state:
+#         st.session_state.messages = []
+#     for message in st.session_state.messages:
+#         with st.chat_message(message["role"]):
+#             st.markdown(message["content"])
+
+#     if query := st.chat_input("Ask Suppy, our superstore assistant"):
+#         st.chat_message("user").markdown(query)
+#         st.session_state.messages.append({"role": "user", "content": query})
+
+#         results = get_elasticsearch_results(query)
+
+#         if results is not None:
+#             prompt = create_openai_prompt(results)
+#             response = generate_openai_completion(prompt, query).strip()
+#             st.chat_message("assistant").markdown(response)
+#             st.session_state.messages.append({"role": "assistant", "content": response})
+#         else:
+#             response = "Unable to process your question"
+#             st.chat_message("assistant").markdown(response)
+#             st.session_state.messages.append({"role": "assistant", "content": response})

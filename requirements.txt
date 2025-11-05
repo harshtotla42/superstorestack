@@ -1,1 +1,2 @@
 elasticsearch==7.17.9
+openai==1.16.1
