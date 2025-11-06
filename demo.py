@@ -6,9 +6,9 @@ import pandas as pd
 # ---------------------------------------------
 # CONFIGURATION
 # ---------------------------------------------
-ES_HOST = "https://eden-search-smokestack-2025-11-03-ab4014.es.us-east4.gcp.elastic-cloud.com/"
-ES_USER = "harsh"
-ES_PASS = "123456"
+ES_HOST = st.secrets["es_host"]
+ES_USER = st.secrets["es_user"]
+ES_PASS = st.secrets["es_pass"]
 
 # Connect to Elasticsearch
 es = Elasticsearch(
@@ -18,9 +18,9 @@ es = Elasticsearch(
 )
 
 # Configure OpenAI
-# openai_client = OpenAI(
-#     api_key=""
-# )
+openai_client = OpenAI(
+    api_key=st.secrets["openai_key"]
+)
 
 index_source_fields = {
     "ele-faq": [
@@ -389,25 +389,25 @@ with tab3:
                     st.markdown("---")
         else:
             st.info("No articles found. Try changing your filters or query.")
-# with tab4:
-#     if "messages" not in st.session_state:
-#         st.session_state.messages = []
-#     for message in st.session_state.messages:
-#         with st.chat_message(message["role"]):
-#             st.markdown(message["content"])
+with tab4:
+    if "messages" not in st.session_state:
+        st.session_state.messages = []
+    for message in st.session_state.messages:
+        with st.chat_message(message["role"]):
+            st.markdown(message["content"])
 
-#     if query := st.chat_input("Ask Suppy, our superstore assistant"):
-#         st.chat_message("user").markdown(query)
-#         st.session_state.messages.append({"role": "user", "content": query})
+    if query := st.chat_input("Ask Suppy, our superstore assistant"):
+        st.chat_message("user").markdown(query)
+        st.session_state.messages.append({"role": "user", "content": query})
 
-#         results = get_elasticsearch_results(query)
+        results = get_elasticsearch_results(query)
 
-#         if results is not None:
-#             prompt = create_openai_prompt(results)
-#             response = generate_openai_completion(prompt, query).strip()
-#             st.chat_message("assistant").markdown(response)
-#             st.session_state.messages.append({"role": "assistant", "content": response})
-#         else:
-#             response = "Unable to process your question"
-#             st.chat_message("assistant").markdown(response)
-#             st.session_state.messages.append({"role": "assistant", "content": response})
+        if results is not None:
+            prompt = create_openai_prompt(results)
+            response = generate_openai_completion(prompt, query).strip()
+            st.chat_message("assistant").markdown(response)
+            st.session_state.messages.append({"role": "assistant", "content": response})
+        else:
+            response = "Unable to process your question"
+            st.chat_message("assistant").markdown(response)
+            st.session_state.messages.append({"role": "assistant", "content": response})
